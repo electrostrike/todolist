@@ -1,51 +1,82 @@
-import { StyleSheet, Text, TextInput, View, Pressable } from 'react-native'
+import { StyleSheet, Text, TextInput, View, Pressable, Keyboard, TouchableWithoutFeedback } from 'react-native'
 import React, { useState } from 'react'
 import { AntDesign } from '@expo/vector-icons'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import db from '../../../firebaseConfig.js';
-import { collection, addDoc } from 'firebase/firestore'
+import { collection, addDoc, updateDoc } from 'firebase/firestore'
 
 const index = () => {
   const [value, setValue] = useState("");
-  const [currentCategory, setCurrentCategory] = useState("");
+  const [currentCategory, setCurrentCategory] = useState("Other");
   const [date, setDate] = useState(new Date());
-  const [deadline, setDeadline] = useState(new Date());
-  const [show, setShow] = useState(false);
+  const [time, setTime] = useState(new Date());
+  const [deadlineDate, setDeadlineDate] = useState(new Date());
+  const [deadlineTime, setDeadlineTime] = useState(new Date());
+  const [showDate, setShowDate] = useState(false);
+  const [showTime, setShowTime] = useState(false);
+
   const categories = [
     "Chores",
     "School",
     "Work",
     "Plan",
+    "Other",
   ];
-  const suggestions = [
-    "Drink water",
-    "Do the chores",
-    "Read a book",
-  ];
+  // const suggestions = [
+  //   "Lorem ipsum",
+  //   "Lorem ipsum",
+  // ];
 
   const handleDate = ({type}, selectedDate) => {
     if (type === "set") {
-      setShow(!show);
+      setShowDate(!showDate);
       const currentDate = selectedDate;
       setDate(currentDate);
-      setDeadline(currentDate.toDateString());
+      setDeadlineDate(currentDate.toDateString());
     } else {
-      setShow(!show);
+      setShowDate(!showDate);
+    }
+  }
+
+  const handleTime = ({type}, selectedTime) => {
+    if (type === "set") {
+      setShowTime(!showTime);
+      const currentTime = selectedTime;
+      setTime(currentTime);
+      setDeadlineTime(currentTime.toLocaleTimeString());
+    } else {
+      setShowTime(!showTime);
     }
   }
 
   const handleSubmit = async () => {
     try {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const day = date.getDate();
+    
+      const hours = time.getHours();
+      const minutes = time.getMinutes();
+      const seconds = 0;
+
+      const dt = new Date(year, month, day, hours, minutes, seconds);
       const ref = await addDoc(collection(db, 'todos'), {
         task: value,
         category: currentCategory,
         status: false,
-        deadline: date,
+        deadline: dt,
+        ontime: true,
+        createdAt: new Date(),
+      });
+      await updateDoc(ref, {
+        id: ref.id
       });
       setValue("");
-      setCurrentCategory("");
+      setCurrentCategory("Other");
       setDate(new Date());
-      setDeadline(new Date());
+      setDeadlineDate(new Date());
+      setTime(new Date());
+      setDeadlineTime(new Date());
       alert('Task added!');
     } catch(err) {
       console.log(err);
@@ -53,35 +84,41 @@ const index = () => {
   }
 
   return (
-    <View style={(styles.container)}>
-      <Text style={(styles.header)}>New task</Text>
-      <TextInput value={value} placeholder='Type your task here...' onChangeText={setValue} style={(styles.input)}/>
-      <Text style={(styles.label)}>Deadline</Text>
-      <Pressable onPress={() => setShow(!show)}> 
-        <TextInput value={deadline} placeholder='Deadline...' onChangeText={setDeadline} editable={false} style={(styles.input)}/>
-      </Pressable>
-      {show && <DateTimePicker mode="date" display="spinner" value={date} onChange={handleDate} />}
-      <Text style={(styles.label)}>Choose a category</Text>
-      <View style={(styles.category)}>
-      {categories.map((category, id) => (
-          <Pressable key={id} style={currentCategory === category ? (styles.activeItem) : (styles.item)} onPress={() => setCurrentCategory(category)}>
-            <Text style={(styles.text)}>{category}</Text>
-          </Pressable>
-        ))}
+    <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+      <View style={(styles.container)}>
+        <Text style={(styles.header)}>New task</Text>
+        <TextInput value={value} placeholder='Type your task here...' onChangeText={setValue} style={(styles.input)}/>
+        <Text style={(styles.label)}>Deadline</Text>
+        <Pressable onPress={() => setShowDate(!showDate)}> 
+          <TextInput value={deadlineDate} placeholder='Date...' onChangeText={setDeadlineDate} editable={false} style={(styles.input)}/>
+        </Pressable>
+        {showDate && <DateTimePicker mode="date" display="spinner" value={date} onChange={handleDate} />}
+        <Pressable onPress={() => setShowTime(!showTime)}> 
+          <TextInput value={deadlineTime} placeholder='Time...' onChangeText={setDeadlineTime} editable={false} style={(styles.input)}/>
+        </Pressable>
+        {showTime && <DateTimePicker mode="time" display="spinner" value={time} onChange={handleTime} />}
+        <Text style={(styles.label)}>Choose a category</Text>
+        <View style={(styles.category)}>
+        {categories.map((category, id) => (
+            <Pressable key={id} style={currentCategory === category ? (styles.activeItem) : (styles.item)} onPress={() => setCurrentCategory(category)}>
+              <Text style={(styles.text)}>{category}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {/* <Text style={(styles.label)}>Suggestions</Text>
+        <View style={(styles.suggestion)}>
+          {suggestions.map((suggestion, id) => (
+            <Pressable key={id} style={(styles.item)} onPress={() => {setValue(suggestion)}}>
+              <Text style={(styles.text)}>{suggestion}</Text>
+            </Pressable>
+          ))}
+        </View> */}
+        <Pressable style={(styles.add)} onPress={handleSubmit}>
+          <AntDesign name="pluscircleo" size={24} color="black" style={(styles.addIcon)}/>
+          <Text style={(styles.addText)}>Add new task</Text>
+        </Pressable>
       </View>
-      <Text style={(styles.label)}>Suggestions</Text>
-      <View style={(styles.suggestion)}>
-        {suggestions.map((suggestion, id) => (
-          <Pressable key={id} style={(styles.item)} onPress={() => {setValue(suggestion)}}>
-            <Text style={(styles.text)}>{suggestion}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <Pressable style={(styles.add)} onPress={handleSubmit}>
-        <AntDesign name="pluscircleo" size={24} color="black" style={(styles.addIcon)}/>
-        <Text style={(styles.addText)}>Add new task</Text>
-      </Pressable>
-    </View>
+    </TouchableWithoutFeedback>
   )
 }
 
@@ -93,7 +130,7 @@ const styles = StyleSheet.create({
     padding: 20,
     display: "flex",
     flexDirection: "column",
-    gap: 20,
+    gap: 30,
     backgroundColor: "white",
     flex: 1,
   },
@@ -117,19 +154,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  suggestion: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
-  },
   item: {
-    padding: 14,
-    borderRadius: 14,
+    padding: 10,
+    borderRadius: 10,
     backgroundColor: "lightblue",
   },
   activeItem: {
-    padding: 14,
-    borderRadius: 14,
+    padding: 10,
+    borderRadius: 10,
     backgroundColor: "#7CB9E8",
   },
   text: {
@@ -146,6 +178,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 50,
     backgroundColor: "#7CB9E8",
+    marginTop: 50,
   },
   addText: {
     fontSize: 16,

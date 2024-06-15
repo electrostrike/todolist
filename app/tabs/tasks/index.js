@@ -1,7 +1,9 @@
 import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native'
 import React, { useState, useEffect } from 'react'
-import db from '../../../firebaseConfig.js';
-import { collection, getDocs, where } from 'firebase/firestore'
+import { AntDesign } from '@expo/vector-icons';
+import db from '../../../firebaseConfig.js'
+import { collection, query, where, doc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore'
+import moment from 'moment'
 
 const index = () => {
   const [toDos, setToDos] = useState([]);
@@ -12,36 +14,53 @@ const index = () => {
     "School",
     "Work",
     "Plan",
+    "Other",
   ];
 
-  /*const getToDos = async () => {
-    setToDos([]);
-    const arr = [];
-    try {
-      if (currentCategory === "All") {
-        const ref = await getDocs(collection(db, "todos"), where("status", "==", false));
-        ref.forEach((doc) => {
-          //console.log(doc.data());
-          arr.push(doc.data());
-        })
-      } else {
-        const ref = await getDocs(collection(db, "todos"), where("status", "==", false), where("category", "==", currentCategory));
-        ref.forEach((doc) => {
-          //console.log(doc.data());
-          arr.push(doc.data());
-        })
-      }
+  useEffect(() => {
+    let q;
+    if (currentCategory === "All") {
+      q = query(collection(db, "todos"), where("status", "==", false));
+    } else {
+      q = query(collection(db, "todos"), where("status", "==", false), where("category", "==", currentCategory));
+    }
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const arr = [];
+      querySnapshot.forEach((doc) => {
+        arr.push({ ...doc.data(), id: doc.id });
+      });
       setToDos(arr);
-    } catch(err) {
+    }, (error) => {
+      console.log(error);
+    });
+
+    return () => unsubscribe(); // Cleanup subscription on unmount
+  }, [currentCategory]);
+
+  const handleStatus = async (toDo) => {
+    try {
+      const todoRef = doc(db, "todos", toDo.id);
+      await updateDoc(todoRef, {
+        status: true,
+      });
+      if (moment().isAfter(toDo.deadline.toDate())) {
+        await updateDoc(todoRef, {
+          ontime: false,
+        });
+      }
+    } catch (err) {
       console.log(err);
-    } 
+    }
   };
 
-  // bug filter
-  useEffect(() => {
-    getToDos();
-    console.log(toDos);
-  }, [currentCategory]);*/
+  const handleDelete = async (toDo) => {
+    try {
+      await deleteDoc(doc(db, "todos", toDo.id));
+    } catch (err) {
+      console.log(err);
+    }
+  };
 
   return (
     <>
@@ -56,7 +75,46 @@ const index = () => {
       <ScrollView style={(styles.content)}>
         <View style={(styles.toDo)}>
           {toDos?.length ? (
-            <View style={(styles.tasks)}></View>
+            <View style={(styles.tasks)}>
+              <Text style={(styles.textDue)}>Due tasks</Text>
+              {toDos.filter((toDo) => {
+                return moment().isBefore(toDo.deadline.toDate());
+              }).map((toDo, id) => (
+                <View style={(styles.toDoItem)} key={id}>
+                  <View>
+                    <Text style={(styles.toDoText)}>
+                      {"(" + toDo.category + ") " + toDo.task}
+                    </Text>
+                    <Text style={(styles.toDoDeadline)}>
+                      {moment(toDo.deadline.toDate()).from(moment())}
+                    </Text>
+                  </View>
+                  <View style={styles.icon}>
+                    <AntDesign onPress={() => handleStatus(toDo)} name="checkcircle" size={36} color="black" />
+                    <AntDesign onPress={() => handleDelete(toDo)} name="closecircle" size={36} color="black" />
+                  </View>
+                </View>
+              ))}
+              <Text style={(styles.textLate)}>Late tasks</Text>
+              {toDos.filter((toDo) => {
+                return moment().isAfter(toDo.deadline.toDate());
+              }).map((toDo, id) => (
+                <View style={(styles.toDoItemLate)} key={id}>
+                  <View>
+                    <Text style={(styles.toDoText)}>
+                      {"(" + toDo.category + ") " + toDo.task}
+                    </Text>
+                    <Text style={(styles.toDoDeadline)}>
+                      {moment(toDo.deadline.toDate()).from(moment())}
+                    </Text>
+                  </View>
+                  <View style={styles.icon}>
+                    <AntDesign onPress={() => handleStatus(toDo)} name="checkcircle" size={36} color="black" />
+                    <AntDesign onPress={() => handleDelete(toDo)} name="closecircle" size={36} color="black" />
+                  </View>
+                </View>
+              ))}
+            </View>
           ) : (
             <View style={(styles.empty)}>
               <Image style={(styles.image)} source={require("../../../assets/empty.png")}/>
@@ -81,15 +139,15 @@ const styles = StyleSheet.create({
   },
   navItem: {
     backgroundColor: "lightblue",
-    padding: 12,
-    borderRadius: 12,
+    padding: 10,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },  
   navActiveItem: {
     backgroundColor: "#7CB9E8",
-    padding: 12,
-    borderRadius: 12,
+    padding: 10,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -122,5 +180,52 @@ const styles = StyleSheet.create({
   text: {
     fontWeight: "bold",
     fontSize: 24,
+  },
+  textDue: {
+    fontWeight: "bold",
+    fontSize: 24,
+    color: "#00b4d8",
+  },
+  textLate: {
+    fontWeight: "bold",
+    fontSize: 24,
+    color: "#f94449",
+  },
+  tasks: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 20,
+  },
+  toDoItem: {
+    backgroundColor: "#00b4d8",
+    padding: 20,
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 20,
+  },
+  toDoItemLate: {
+    backgroundColor: "#f94449",
+    padding: 20,
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 20,
+  },
+  toDoText: {
+    color: "black",
+    fontSize: 22,
+    maxWidth: 200,
+  },
+  toDoDeadline: {
+    color: "black",
+    fontSize: 16,
+  },
+  icon: {
+    display: "flex",
+    flexDirection: "row",
+    gap: 10,
   },
 })
